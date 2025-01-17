@@ -18,6 +18,7 @@ $MsftBloat = @(
     "*BingSports*"
     "*BingTranslator*"
     "*BingWeather*"
+    "*Copilot*"
     "*FreshPaint*"
     "*3DViewer*"
     "*FeedbackHub*"
