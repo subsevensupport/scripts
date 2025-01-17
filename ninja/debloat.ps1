@@ -139,26 +139,27 @@ if ($Core) { $apps += $CoreApps }
 
 if ($All) {
     Write-Host "Removing all apps except Microsoft Core"
-    $packages = Get-AppxPackage -AllUsers
-    foreach ($app in $MsftCore) {
-        $packages = $packages | Where-Object { $_.Name -notlike $app }
-    }
-    $packages | Remove-AppxPackage -AllUsers
 
     $packages = Get-AppxProvisionedPackage -online
     foreach ($app in $MsftCore) {
         $packages = $packages | Where-Object { $_.DisplayName -notlike $app }
     }
-    $packages | Remove-AppxProvisionedPackage -online
+    $packages | Remove-AppxProvisionedPackage -online -AllUsers
+
+    $packages = Get-AppxPackage -AllUsers
+    foreach ($app in $MsftCore) {
+        $packages = $packages | Where-Object { $_.Name -notlike $app }
+    }
+    $packages | Remove-AppxPackage -AllUsers
 }
 else {
     foreach ($app in $apps) {
         Write-Output "Trying to remove $app"
+
+        Get-AppXProvisionedPackage -Online |
+        Where-Object {$_.DisplayName -like $app} |
+        Remove-AppxProvisionedPackage -Online -AllUsers
     
         Get-AppxPackage -Name $app -AllUsers | Remove-AppxPackage -AllUsers
-    
-        Get-AppXProvisionedPackage -Online |
-        Where-Object DisplayName -EQ $app |
-        Remove-AppxProvisionedPackage -Online
     }
 }
