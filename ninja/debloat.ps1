@@ -19,6 +19,8 @@ $MsftBloat = @(
     "*BingTranslator*"
     "*BingWeather*"
     "*Copilot*"
+    "*Cortana*"
+    "*Microsoft.549981C3F5F10*" # Cortana
     "*FreshPaint*"
     "*3DViewer*"
     "*FeedbackHub*"
