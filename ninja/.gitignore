@@ -1,0 +1,9 @@
+# Environment variables
+.env
+
+# Local configuration overrides
+local.*.ps1
+
+# Temporary files
+*.tmp
+*.log
