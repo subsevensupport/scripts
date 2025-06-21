@@ -4,15 +4,18 @@
 # Load environment variables from .env file
 $envPath = Join-Path -Path $PSScriptRoot -ChildPath ".env"
 if (Test-Path $envPath) {
-    Get-Content $envPath | ForEach-Object {
-        if ($_ -match '^([^#].*?)=(.*)') {
-            $name = $matches[1].Trim()
-            $value = $matches[2].Trim()
-            [System.Environment]::SetEnvironmentVariable($name, $value)
-        }
+    # Read the file, filter out comments and empty lines, then convert to hashtable
+    $envVars = Get-Content $envPath | 
+        Where-Object { $_ -notmatch '^\s*#' -and $_.Contains('=') } |
+        Out-String | 
+        ConvertFrom-StringData
+    
+    # Set each environment variable
+    $envVars.GetEnumerator() | ForEach-Object {
+        [System.Environment]::SetEnvironmentVariable($_.Key, $_.Value)
     }
 } else {
-    Write-Error ".env file not found. Please create it in the script directory."
+    Write-Error ".env file not found at $envPath"
     exit 1
 }
 
