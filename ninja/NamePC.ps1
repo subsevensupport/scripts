@@ -4,11 +4,12 @@ param (
     [switch]$IsServer
 )
 
+
 if (Test-Path -Path ".env") {
     $Env = Get-Content -Raw -Path ".env" | ConvertFrom-StringData
     $Env.GetEnumerator() | ForEach-Object {
         $Name, $Value = $_.Name, $_.Value
-        Set-Content -Path "env:/$Name" -Value $Value
+        Set-Content -Path "env:/$Name" -Value $Value -WhatIf:$false
     }
 }
 
@@ -31,6 +32,7 @@ $SERVER_ROLE_CODE_MAP = @{
     '8c31281d-ecc0-42ca-9720-5a95a2637c90' = 'WB' # Web Server
 }
 $TAG_API_ENDPOINT = "https://tag.lab.subseven.net/next-number"
+$TAG_PEEK_ENDPOINT = "https://tag.lab.subseven.net/peek-next-number"
 
 
 function Get-ComputerAssetTag {
@@ -106,9 +108,25 @@ function Get-NextAvailableAssetTag {
         }
     }
     else {
-        # -WhatIf mode: return placeholder and show what would happen
-        Write-Verbose "What if: Would retrieve next available asset tag from API at '$TAG_API_ENDPOINT'" 
-        return "XXXX"
+        Write-Verbose "What if: Would retrieve next available asset tag from API at '$TAG_API_ENDPOINT'"
+        try {
+            $Username = $env:ASSET_TAG_READER_USERNAME
+            $Password = ConvertTo-SecureString $env:ASSET_TAG_READER_PASSWORD -AsPlainText -Force
+            $Cred = New-Object System.Management.Automation.PSCredential ($Username, $Password)
+
+            $response = Invoke-RestMethod -Uri $TAG_PEEK_ENDPOINT -Method Get -Credential $Cred -TimeoutSec 30 -ErrorAction Stop
+
+            $AssetTag = $response.number.ToString().PadLeft(4, '0')
+
+            Write-Verbose "What if: Next available asset tag would be $AssetTag"
+            $AssetTag
+
+        }
+        catch {
+            Write-Verbose "Error peeking next number: $_"
+            "XXXX"
+        } 
+        
     }
 }
 
@@ -267,12 +285,12 @@ function Set-ComputerName {
         Write-Verbose "Renaming computer from '$env:COMPUTERNAME' to '$NewComputerName'..."
         try {
             if ($ForceReboot) {
-                Write-Output "Renaming computer and forcing reboot..."
+                Write-Host "Renaming computer and forcing reboot..."
                 Rename-Computer -NewName $NewComputerName -Restart -Force -ErrorAction Stop
             }
             else {
                 Rename-Computer -NewName $NewComputerName -ErrorAction Stop
-                Write-Output "Computer renamed to '$NewComputerName'. Restart required to complete the process."
+                Write-Host "Computer renamed to '$NewComputerName'. Restart required to complete the process."
             }
             Write-Verbose "Computer rename operation completed successfully"
         }
@@ -295,7 +313,7 @@ function Set-ComputerName {
 }
 
 function New-ComputerName {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     [OutputType([string])]
     param ()
 
@@ -303,33 +321,29 @@ function New-ComputerName {
         Write-Verbose "Starting computer name generation process..."
         
         $ClientCode = Get-ComputerClientCode
-        Write-Verbose "Client code: $ClientCode"
+        Write-Host "Client code: $ClientCode"
         
         $TypeCode = Get-ComputerTypeCode
-        Write-Verbose "Type code: $TypeCode"
+        Write-Host "Type code: $TypeCode"
 
         $AssetTag = Get-ComputerAssetTag
         if (-not $AssetTag) {
             Write-Verbose "Current asset tag field is empty, retrieving new asset tag..."
             $AssetTag = Get-NextAvailableAssetTag
-            
-            if ($AssetTag -ne "XXXX") {
-                # Only save if not in WhatIf mode
+
+            if ($PSCmdlet.ShouldProcess("$env:COMPUTERNAME", "Saving asset tag to custom field")) {
                 Set-ComputerAssetTag -AssetTag $AssetTag
-                # Verify the asset tag was saved properly
                 $SavedAssetTag = Get-ComputerAssetTag
                 if ($SavedAssetTag -ne $AssetTag) {
                     throw "Asset tag verification failed after saving. Expected '$AssetTag' but custom field contains '$SavedAssetTag'"
                 }
                 Write-Verbose "Asset tag $AssetTag saved and verified successfully"
             }
-            else {
-                Write-Verbose "Using placeholder asset tag for WhatIf simulation"
-            }
         }
         else {
             Write-Verbose "Using existing asset tag: $AssetTag"
         }
+        Write-Host "Asset tag: $AssetTag"
 
         $ComputerName = "$ClientCode-$TypeCode-$AssetTag"
         Write-Verbose "Generated computer name: $ComputerName"        
@@ -342,27 +356,27 @@ function New-ComputerName {
 
 # Main script execution with error handling
 try {
-    Write-Output "Starting computer naming process..."
+    Write-Host "Starting computer naming process..."
     
     $NewComputerName = New-ComputerName
-    Write-Output "Generated computer name: $NewComputerName" 
+    Write-Host "Generated computer name: $NewComputerName" 
     
     Set-ComputerName -NewComputerName $NewComputerName
     
     if (-not $WhatIfPreference) {
-        Write-Output "Computer naming process completed successfully!" 
+        Write-Host "Computer naming process completed successfully!" 
         if (-not $ForceReboot) {
-            Write-Output "Please restart the computer to complete the rename process." 
+            Write-Host "Please restart the computer to complete the rename process." 
         }
     }
 }
 catch {
     Write-Error "Computer naming process failed: $($_.Exception.Message)"
-    Write-Output "Troubleshooting tips:" 
-    Write-Output "1. Ensure client code custom field is populated at the organization level" 
-    Write-Output "2. For servers, ensure primaryRole custom field is set" 
-    Write-Output "3. Verify .env file contains ASSET_TAG_USERNAME and ASSET_TAG_PASSWORD" 
-    Write-Output "4. Run as administrator for computer rename operations" 
-    Write-Output "5. Check network connectivity to asset tag API"
+    Write-Host "Troubleshooting tips:" 
+    Write-Host "1. Ensure client code custom field is populated at the organization level" 
+    Write-Host "2. For servers, ensure primaryRole custom field is set" 
+    Write-Host "3. Verify .env file contains ASSET_TAG_USERNAME and ASSET_TAG_PASSWORD" 
+    Write-Host "4. Run as administrator for computer rename operations" 
+    Write-Host "5. Check network connectivity to asset tag API"
     exit 1
 }
