@@ -84,6 +84,10 @@ try {
             Write-Verbose "User '$Name' is already a member of the Administrators group."
         }
     }
+    else {
+        # if the user isn't a member of any group they won't be able to log in
+        Add-LocalGroupMember -Group 'Users' -Member $Name -ErrorAction Stop
+    }
 }
 catch {
     $errorMessage = $_.Exception.Message
